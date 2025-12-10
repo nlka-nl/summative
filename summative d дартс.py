@@ -41,7 +41,7 @@ class detect_dartboard:
 
         self.darts = []
 
-    def nastya(self, frame):
+    def detect_board(self, frame):
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.medianBlur(gray, 5)
