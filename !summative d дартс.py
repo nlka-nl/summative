@@ -49,7 +49,9 @@ class detect_dartboard:
         # Поиск кругов (мишени)
         circles = cv2.HoughCircles(
             gray, cv2.HOUGH_GRADIENT, 1, 100,
-            param1 = 100, param2 = 30, minRadius=100, maxRadius=250
+            param1 = 100, param2 = 30, minRadius = 100, maxRadius = 250
         )
+
+
 
         
