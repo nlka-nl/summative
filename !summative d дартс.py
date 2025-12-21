@@ -44,7 +44,7 @@ class detect_dartboard:
 
         self.darts = []
 
-    def detect_board(self, frame):
+    def detect_b(self, frame):
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.medianBlur(gray, 5)
@@ -102,8 +102,10 @@ class detect_dartboard:
                     dist = math.sqrt(x * x + y * y)
 
                     if dist <= self.radius * 1.2:
-                        x, y, w, h = cv2.boundingRect(i)
 
 
+
+
+detect_dartboard()
 
         
