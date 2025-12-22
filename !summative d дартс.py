@@ -4,19 +4,16 @@ import time
 
 COLORS = {
     'team1': (0, 255, 0),
-    'team2': (255, 0, 0),
+    'team2': (0, 0, 255),
     'text': (255, 255, 255)
 }
 
-
 class dartboard:
-
     def __init__(self):
 
         self.center = None
         self.radius = None
         self.last_hit = None
-        self.lteam = None
 
         self.rbull = 22
         self.rbullo = 41
@@ -131,7 +128,7 @@ class dartboard:
         dx = x - self.center[0]
         dy = self.center[1] - y
 
-        angle = (np.degrees(np.arctan2(dy, dx)) + 360 - 8) % 360
+        angle = (np.degrees(np.arctan2(dy, dx)) + 360 ) % 360
 
         for p, start in self.angle.items():
             if start <= angle < start + 18:
@@ -171,12 +168,15 @@ class dartboard:
 
         b, g, r = np.mean(roi, axis=(0, 1))
 
-        return 1 if g > r else 2
+        if g > 130 and g < 190:
+            return 1
+
+        return 2
 
     def register_score(self, frame, x, y):
 
         if self.last_hit is not None:
-            if abs(self.last_hit[0] - x) <= 10 or abs(self.last_hit[1] - y) <= 10:
+            if abs(self.last_hit[0] - x) <= 30 or abs(self.last_hit[1] - y) <= 30:
                 return
 
         sector = self.get_sector(x, y)
@@ -200,9 +200,6 @@ class dartboard:
         self.last_hit = (x, y)
 
         print(f"team = {team}, sector = {sector}, zone = {zone}, +{points}")
-
-
-# ================== ЗАПУСК ВИДЕО ==================
 
 cap = cv2.VideoCapture(r"C:\Users\user\PycharmProjects\pythonProject7\IMG_6576.MOV")
 board = dartboard()
