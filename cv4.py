@@ -43,7 +43,7 @@ def kvadrat(im):
 img = cv2.imread("input.png")
 
 imghsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-lower = np.array([23, 50, 100])
+lower = np.array([22, 55, 100])
 upper = np.array([31, 255, 255])
 mask = cv2.inRange(imghsv, lower, upper)
 img_mask = cv2.bitwise_and(img, img, mask=mask)

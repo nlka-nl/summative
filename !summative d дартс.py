@@ -77,9 +77,6 @@ class dartboard:
 
             (x, y), r = cv2.minEnclosingCircle(c)
 
-            if r < 8 or r > 40:
-                continue
-
             dist = np.hypot(x - cx, y - cy)
 
             if dist < bdist:
@@ -128,7 +125,7 @@ class dartboard:
         dx = x - self.center[0]
         dy = self.center[1] - y
 
-        angle = (np.degrees(np.arctan2(dy, dx)) + 360 ) % 360
+        angle = (np.degrees(np.arctan2(dy, dx)) + 360) % 360
 
         for p, start in self.angle.items():
             if start <= angle < start + 18:
@@ -199,7 +196,7 @@ class dartboard:
 
         self.last_hit = (x, y)
 
-        print(f"team = {team}, sector = {sector}, zone = {zone}, +{points}")
+        print(f"team = {team}, sector = {sector}, zone = {zone}, +{points}, coord: {x, y}")
 
 cap = cv2.VideoCapture(r"C:\Users\user\PycharmProjects\pythonProject7\IMG_6576.MOV")
 board = dartboard()
