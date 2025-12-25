@@ -1,16 +1,8 @@
 import cv2
 import numpy as np
-
-COLORS = {
-    'team1': (0, 255, 0),
-    'team2': (0, 0, 255),
-    'text': (255, 255, 255)
-}
-
 class dartboard:
     def __init__(self):
 
-        self.cnt = 0 #счетчик брошенных дротиков
         self.center = None #центр мишени
         self.radius = None #радиус яблочка
         self.last_hit = None #координаты последнего удра
@@ -22,30 +14,33 @@ class dartboard:
         self.rsouter = 430
         self.rdouble = 470
 
+        self.bull_coef = 1.0
+        self.bullo_coef = 1.9
+        self.sinner_coef = 12.0
+        self.triple_coef = 13.8
+        self.souter_coef = 19.5
+        self.double_coef = 21.4
+
+
         # детектим что, дротик остановился
         self.stable_frames = 0  #стабильные кадры
         self.stable_point = None  #точка, куда попал дротик
+        self.hits = []
 
-        self.angle = {
-            20: 0, 1: 18, 18: 36, 4: 54, 13: 72, 6: 90,
-            10: 108, 15: 126, 2: 144, 17: 162, 3: 180,
-            19: 198, 7: 216, 16: 234, 8: 252, 11: 270,
-            14: 288, 9: 306, 12: 324, 5: 342
-        }
-
-        self.zone_points = {
-            0: 50,
-            1: 25,
-            2: 1,
-            3: 3,
-            4: 1,
-            5: 2,
-            6: 0
-        }
+        self.angle = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5] #порядок секторов по часовой
+        self.pogr = 0 #смещение двадцатки по углу на видео
 
         self.team1_score = 0
         self.team2_score = 0
         self.pframe = None #предыдущий кадр для сравнения
+
+    def is_new_hit(self, point, r = 15):
+
+        for x, y in self.hits:
+            if np.hypot(point[0] - x, point[1] - y) < r:
+                return False
+
+        return True
 
     def detect_red(self, frame):# нахождения яблочка с помощью накладывания красной маски
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -74,9 +69,10 @@ class dartboard:
         bdist = 1e9
 
         for c in contours:
+
             s = cv2.contourArea(c)
 
-            if s < 200:
+            if s < 200: #слишком маленькие не подходят
                 continue
 
             (x, y), r = cv2.minEnclosingCircle(c)
@@ -84,7 +80,7 @@ class dartboard:
             if r < 8 or r > 40:
                 continue
 
-            dist = np.hypot(x - cx, y - cy)
+            dist = np.hypot(x - cx, y - cy) #расстояние от центра
 
             if dist < bdist:
                 bdist = dist
@@ -99,10 +95,11 @@ class dartboard:
 
     def detect_darts(self, frame): #определение брошен ли дротик
 
+        if self.center is None or self.radius is None:
+            return None
+
         cur = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
         cur = cv2.equalizeHist(cur)
-
         cur = cv2.GaussianBlur(cur, (5, 5), 0)
 
         if self.pframe is None:
@@ -112,6 +109,10 @@ class dartboard:
         dif = cv2.absdiff(self.pframe, cur)
         _, thresh = cv2.threshold(dif, 12, 255, cv2.THRESH_BINARY)
 
+        mask = np.zeros_like(thresh)
+        cv2.circle(mask, self.center, int(self.radius * 21), 255, -1)
+        thresh = cv2.bitwise_and(thresh, mask)
+
         k = np.ones((5, 5), np.uint8)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, k)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, k)
@@ -119,20 +120,27 @@ class dartboard:
         contours, _ = cv2.findContours(
             thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        self.pframe = cur
-
-        best_area = 0
+        barea = 0
         best = None
 
         for c in contours:
-            if cv2.contourArea(c) < 200:
+
+            if cv2.contourArea(c) < 80:
                 continue
 
-            if cv2.contourArea(c) > best_area:
-                best_area = cv2.contourArea(c)
-                best = c
+            x, y, w, h = cv2.boundingRect(c)
+            cx = x + w //2
+            cy = y + h // 2
+
+            if self.is_new_hit((cx, cy)):
+                if cv2.contourArea(c) > barea:
+                    barea = cv2.contourArea(c)
+                    best = (cx, cy)
+
+        self.pframe = cur
 
         if best is None:
+
             if self.stable_point is not None:
                 self.stable_frames += 1
 
@@ -141,63 +149,82 @@ class dartboard:
                     hit = self.stable_point
                     self.stable_point = None
 
+                    if self.is_new_hit(hit):
+                        self.hits.append(hit)
+
                     return hit
 
             return None
 
-        x, y, w, h = cv2.boundingRect(best)  # замениит
-        cx = x + w // 2
-        cy = y + h // 2
-
         if self.stable_point is None:
-            self.stable_point = (cx, cy)
+            self.stable_point = best
             self.stable_frames = 1
+
             return None
 
-        dist = np.hypot(cx - self.stable_point[0], cy - self.stable_point[1])
+        dist = np.hypot(best[0] - self.stable_point[0], best[1] - self.stable_point[1])
 
-        if dist < 10:
+        if dist < 4:
             self.stable_frames += 1
+
         else:
-            self.stable_point = (cx, cy)
+            self.stable_point = best
             self.stable_frames = 1
 
         if self.stable_frames >= 6:
-            self.stable_frames = 0
             hit = self.stable_point
             self.stable_point = None
-            return hit
+            self.stable_frames = 0
+
+            if self.is_new_hit(hit):
+                self.hits.append(hit)
+
+                return hit
+
         return None
+
+    def calibrate(self, x, y):
+        cx, cy = self.center
+        dx = x - cx
+        dy = cy - y
+
+        deg = (np.degrees(np.arctan2(dy, dx)) + 360) % 360
+        angle_real = (90 - deg) % 360
+        self.pogr = (-angle_real) % 360
 
     def get_sector(self, x, y):
         dx = x - self.center[0]
         dy = self.center[1] - y
 
-        angle = (np.degrees(np.arctan2(dy, dx)) + 360 + 21) % 360
+        deg = (np.degrees(np.arctan2(dy, dx)) + 360) % 360
+        angle_real = (90 - deg) % 360
+        angle_corrected = (angle_real + self.pogr) % 360
+        index = int((angle_corrected + 9) // 18) % 20
 
-        for p, start in self.angle.items():
-            if start <= angle < start + 18:
-                return p
-
-        return None
+        return self.angle[index]
 
     def get_zone(self, x, y):
-        dist = np.linalg.norm([x - self.center[0], y - self.center[1]])
+        dist = np.hypot(x - self.center[0], y - self.center[1])
 
         if dist < self.rbull:
-            return 0
-        elif dist < self.rbullo:
-            return 1
-        elif dist < self.rsinner:
-            return 2
-        elif dist < self.rtriple:
-            return 3
-        elif dist < self.rsouter:
-            return 4
-        elif dist < self.rdouble:
-            return 5
-        else:
-            return 6
+            return 'bull'
+
+        if dist < self.rbullo:
+            return 'outer_bull'
+
+        if dist < self.rsinner:
+            return 'single_inner'
+
+        if dist < self.rtriple:
+            return 'triple'
+
+        if dist < self.rsouter:
+            return 'single_outer'
+
+        if dist < self.rdouble:
+            return 'double'
+
+        return 'miss'
 
     def detect_team(self, frame, x, y, r=10):
         h, w = frame.shape[:2]
@@ -209,17 +236,27 @@ class dartboard:
             return None
 
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        h_mean = np.mean(hsv[:, :, 0])
+        h = hsv[:, :, 0]
+        s = hsv[:, :, 1]
 
+        mask = s > 60
 
-        if 35 < h_mean < 85:
+        if np.count_nonzero(mask) < 10:
+            return None
+
+        h = h[mask]
+
+        green = np.logical_and(h > 35, h < 85)
+
+        red = np.logical_or(h < 10, h > 160)
+
+        if np.mean(green) > 0.4:
             return 1
 
-        if h_mean < 10 or h_mean > 160:
+        if np.mean(red) > 0.4:
             return 2
 
         return None
-
 
     def register_score(self, frame, x, y):
 
@@ -227,23 +264,65 @@ class dartboard:
         zone = self.get_zone(x, y)
         team = self.detect_team(frame, x, y)
 
-        if sector is None or zone == 6:
+        if zone == 'miss' or team is None:
             return
 
-        points = sector * self.zone_points[zone]
+        m = 1
+
+        if zone == 'triple':
+            m = 3
+
+        if zone == 'double':
+            m = 2
+
+        if zone == 'bull':
+            m = 2
+
+        if zone != 'bull' and zone != 'outer_bull':
+
+            points = sector * m
+
+        else:
+            if zone == 'bull':
+                points = 50
+
+            else:
+                points = 25
 
         if team == 1:
             self.team1_score += points
-        else:
+        elif team == 2:
             self.team2_score += points
 
         self.last_hit = (x, y)
-        self.cnt += 1
-
         print(f"sector = {sector}, zone = {zone}, +{points}")
 
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Камера не открылась")
+    exit()
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+cap.set(cv2.CAP_PROP_FPS, 30)
 
-cap = cv2.VideoCapture(r"C:\Users\user\PycharmProjects\pythonProject7\IMG_6576.MOV")
+for _ in range(20):
+    cap.read()
+
+def mouse(event, x, y, p, f):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        ox = int(x / 0.5)
+        oy = int(y / 0.5)
+
+        if board.center is None:
+            print("Center not detected yet; wait.")
+            return
+
+        board.calibrate(ox, oy)
+        print("Clicked sector (should be 20")
+
+cv2.namedWindow("Dartboard")
+cv2.setMouseCallback("Dartboard", mouse)
+
 board = dartboard()
 cen = False
 
@@ -253,34 +332,40 @@ while cap.isOpened():
     if not ret:
         break
 
-    cen = dartboard.detect_red(board, frame)
+    if board.detect_red(frame):
+        pass
 
     dart = board.detect_darts(frame)
 
-    cv2.circle(frame, board.center, board.radius, (255, 0, 0), 1)
-    cv2.circle(frame, board.center, board.radius + board.rbullo, (0, 255, 255), 2)
-    cv2.circle(frame, board.center, board.radius + board.rsinner, (255, 0, 0), 1)
-    cv2.circle(frame, board.center, board.radius + board.rtriple, (0, 0, 255), 1)
-    cv2.circle(frame, board.center, board.radius + board.rsouter, (0, 0, 255), 1)
-    cv2.circle(frame, board.center, board.radius + board.rdouble, (0, 0, 255), 1)
-
-    if dart:
+    if dart is not None:
         x, y = dart
         board.register_score(frame, x, y)
-        cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
+        cv2.circle(frame, (x, y), 9, (0, 0, 255), -1)
+
+    cen = dartboard.detect_red(board, frame)
+
+    if board.center:
+        cx, cy = board.center
+        r = board.radius
+
+        cv2.circle(frame, (cx, cy), int(r * board.bull_coef), (0, 255, 0), 2)
+        cv2.circle(frame, (cx, cy), int(r * board.bullo_coef), (0, 255, 255), 2)
+        cv2.circle(frame, (cx, cy), int(r * board.sinner_coef), (255, 0, 0), 1)
+        cv2.circle(frame, (cx, cy), int(r * board.triple_coef), (0, 0, 255), 2)
+        cv2.circle(frame, (cx, cy), int(r * board.souter_coef), (255, 0, 0), 1)
+        cv2.circle(frame, (cx, cy), int(r * board.double_coef), (0, 0, 255), 2)
 
 
     cv2.putText(frame, f"Team 1: {board.team1_score}", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, COLORS['team1'], 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     cv2.putText(frame, f"Team 2: {board.team2_score}", (10, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, COLORS['team2'], 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
     small = cv2.resize(frame, None, fx = 0.5, fy = 0.5)
+
     cv2.imshow("Dartboard", small)
     if cv2.waitKey(20) & 0xFF == 27:
         break
-
-
 cap.release()
 cv2.destroyAllWindows()
