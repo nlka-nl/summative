@@ -1,5 +1,80 @@
 import cv2
 import numpy as np
+import tkinter as tk
+from tkinter import font
+
+def start_detection(event=None):
+    root.destroy()
+    print("Запуск основной программы (просим немного подождать, камера разогревается)")
+
+root = tk.Tk()
+root.title("Подготовка к игре в дартс")
+root.geometry("800x600")
+root.configure(bg = '#2c3e50')
+
+title_font = font.Font(family="Arial", size = 18, weight="bold")
+text_font = font.Font(family="Arial", size  =14)
+key_font = font.Font(family="Arial", size = 16, weight="bold")
+
+title_label = tk.Label(
+    root,
+    text="ПОДГОТОВКА",
+    font=title_font,
+    bg='#2c3e50',
+    fg='white'
+)
+title_label.pack(pady=30)
+
+instructions_frame = tk.Frame(root, bg='#34495e', relief=tk.RIDGE, bd=3)
+instructions_frame.pack(pady=20, padx=40, fill=tk.BOTH, expand=True)
+
+instructions = [
+    "1. Расположите мишень строго по центру и без наклонов",
+    "2. Мишень и камера должны находиться в неподвижном состоянии",
+    "3. Поставьте камеру так, чтобы мишень полностью входила в кадр,\n    но не была слишком далеко",
+    "4. После запуска программы кликните мышкой на сектор 20",
+    "5. Разбейтесь на две команды и приготовьте хорошее настроение!"
+]
+
+for i, instruction in enumerate(instructions):
+    label = tk.Label(
+        instructions_frame,
+        text=instruction,
+        font=text_font,
+        bg='#34495e',
+        fg='white',
+        justify=tk.LEFT,
+        anchor="w"
+    )
+    label.pack(pady=15, padx=30, anchor="w")
+
+bottom_frame = tk.Frame(root, bg='#2c3e50')
+bottom_frame.pack(side=tk.BOTTOM, pady=40)
+
+space_key = tk.Label(
+    bottom_frame,
+    text="Если все пункты выполнены и поняты, нажмите пробел",
+    font=key_font,
+    bg='black',
+    fg='white',
+    padx=20,
+    pady=10,
+    relief=tk.RAISED,
+    bd=3
+)
+space_key.pack(pady=10)
+
+root.bind('<space>', start_detection)
+root.focus_set()
+
+root.update_idletasks()
+width = root.winfo_width()
+height = root.winfo_height()
+x = (root.winfo_screenwidth() // 2) - (width // 2)
+y = (root.winfo_screenheight() // 2) - (height // 2)
+root.geometry(f'{width}x{height}+{x}+{y}')
+
+root.mainloop()
 class dartboard:
     def __init__(self):
 
@@ -318,7 +393,7 @@ def mouse(event, x, y, p, f):
             return
 
         board.calibrate(ox, oy)
-        print("Clicked sector (should be 20")
+        print("Clicked sector (should be 20)")
 
 cv2.namedWindow("Dartboard")
 cv2.setMouseCallback("Dartboard", mouse)
